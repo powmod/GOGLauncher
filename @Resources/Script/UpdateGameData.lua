@@ -20,8 +20,15 @@ function naturalSort(a, b)
     return a < b
 end
 
+function round(num)
+	print("num round", num)
+	return math.ceil(num)
+    --return math.floor(num + .5)
+end
+
 function Initialize()
 	SKIN:Bang('!DeactivateConfig', 'GOGLauncher')
+	local update = SKIN:GetVariable('updateList')
 	
 	-- function fileExists(filename)
 		-- local file = io.open(filename, "r")
@@ -46,45 +53,54 @@ function Initialize()
 	local GOGClient = SKIN:GetVariable('GOGGalaxyPath')
 	local script = SKIN:GetVariable('ScriptPath')
 	local Database = SKIN:GetVariable('DatabasePath')
-	local cd = string.format('cd "%s"', script)	
-	local command = string.format('Update.bat "%s"', Database)	
-	local commands = cd .. " && " .. command
-	os.execute(commands)
+	-- local Exclude = SKIN:GetVariable('ExcludeList')
 	
+	if tonumber(update) == 1 then
+		local cd = string.format('cd "%s"', script)	
+		local command = string.format('Update.bat "%s"', Database)	
+		local commands = cd .. " && " .. command
+		os.execute(commands)
+	end
 	
 	
 	-- Parameters
 	local ResX, ResY = SKIN:GetVariable('WORKAREAWIDTH'), SKIN:GetVariable('WORKAREAHEIGHT')  -- Screen resolution
+	local factor = 5E-4 * math.sqrt(ResX * ResY)
 	local ImgX, ImgY = SKIN:GetVariable('ImageWidth'), SKIN:GetVariable('ImageHeight')    -- Image size
 	local ImgA = ImgX * ImgY
-	local padding = SKIN:GetVariable('ImageSpacing')
+	local padding = SKIN:GetVariable('ImageSpacing') * factor 
 	local ResA = (ResX - padding*2) * (ResY - padding*2)
-	local radius = SKIN:GetVariable('CornerRadius') 
-	local NperRow = math.floor(SKIN:GetVariable('ImagesPerRow'))
+	local radius = SKIN:GetVariable('CornerRadius') * factor
+	local NperRow = math.floor(SKIN:GetVariable('NumberOfColumns'))
 	local zoom = SKIN:GetVariable('Zoom')
 	local comp = .99
-	local shadow, shadowOffset, shadowSize, shadowAlpha = SKIN:GetVariable('dropShadow'), SKIN:GetVariable('shadowOffset'), zoom*SKIN:GetVariable('shadowSize'), SKIN:GetVariable('shadowAlpha')
+	local shadow, shadowAlpha = SKIN:GetVariable('dropShadow'), SKIN:GetVariable('shadowAlpha')
+	local shadowOffset =  SKIN:GetVariable('shadowOffset') * factor
+	local shadowSize = zoom * SKIN:GetVariable('shadowSize') * factor
 	local shadowMask = SKIN:GetVariable('shadowMask')
+	local transpose = SKIN:GetVariable('Transpose')
 
+	print("res x, res y", ResX, ResY)
+	print("total work area", ResA)
 	
     local iniContent = [[
-[Rainmeter]
-Update=100000
 
-[Metadata]
-Name=GOGLauncher
-Author=powmod
-Information=Displays installed GOG Galaxy games as a grid on the desktop
-Version=1.0
-License=Creative Commons Attribution - Non - Commercial - Share Alike 3.0
 
 ]]
 
     local file = io.open(SKIN:GetVariable('GameDataPath'), 'r')
+	local Exclude = io.open(SKIN:GetVariable('ExcludeList'), 'r')
 	
+	local excludeLines = {}
+	for line in Exclude:lines() do
+		excludeLines[line] = true
+	end
+
 	local lines = {}
 	for line in file:lines() do
-		table.insert(lines, line)
+		if not excludeLines[line] then
+			table.insert(lines, line)
+		end
 	end
 	
 	table.sort(lines, function(a, b)
@@ -106,27 +122,34 @@ License=Creative Commons Attribution - Non - Commercial - Share Alike 3.0
 		end
 
 		N = #linesArray
+		print("N", N)
 
 		if tonumber(NperRow) == 0 then
 			scaling = math.sqrt((ResA - N * (padding * (ImgX + ImgY) - padding^2)) / (N * ImgA))
-			--print(scaling)
+			--print("scaling", scaling)
 			
 			Nx = math.floor(ResX / (ImgX * scaling + padding))
 			--Ny = math.ceil(ResY / (ImgY * scaling + padding))
 			--print(ResX / (ImgX * scaling + padding),ResY / (ImgY * scaling + padding))
-			Ny = math.ceil(N / Nx)
+			Ny = round(N / Nx)
 			scaling_x = (((ResX / Nx) - padding) / ImgX)
 			scaling_y = (((ResY / Ny) - padding) / ImgY)
 			
 			scaling = math.min(scaling_x, scaling_y)
+			print("scaling", scaling)
+			print("Nx", Nx)
+			print("Ny", Ny)
+			
 		else
-			Nx = math.floor(NperRow)
-			Ny = math.ceil(N / Nx)
+			Nx = NperRow
+			Ny = round(N / Nx)
 			scaling_x = (((ResX / Nx) - padding) / ImgX)
 			scaling_y = (((ResY / Ny) - padding) / ImgY)
 			
 			scaling = math.min(scaling_x, scaling_y)
-			--print(scaling)
+			print("scaling", scaling)
+			print("Nx", Nx)
+			print("Ny", Ny)
 			
 		end
 
@@ -139,14 +162,34 @@ License=Creative Commons Attribution - Non - Commercial - Share Alike 3.0
 
 		startX = emptyX - (padding / 2) - ImgXS
 		startY = emptyY - (padding / 2) - ImgYS
+		
+		if tonumber(transpose) == 1 then
+			tempY = Ny
+			tempX = Nx
+			Nx = tempY
+			Ny = tempX
+			
+			tempImgXS = ImgXS
+			tempImgYS = ImgYS
+			tempstartX = startX
+			tempstartY = startY
+			
+			ImgXS = tempImgYS
+			ImgYS = tempImgXS
+			startX = tempstartY
+			startY = tempstartX
+			
+		end
+			
+			
 
 		count = 1
-		for m = 1, Ny do
-			for n = 1, Nx do
+		for n = 1, Ny do
+			for m = 1, Nx do
 				pathN = linesArray[count]
 				launchN = launchParams[count]
-				x = n * (padding + ImgXS) + startX
-				y = m * (padding + ImgYS) + startY
+				x = m * (padding + ImgXS) + startX
+				y = n * (padding + ImgYS) + startY
 				
 
 				entryMeter1 = string.format([[
